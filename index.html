@@ -95,16 +95,35 @@ let S={
   xpPop:false,xpAmt:0,notif:null,notifTimer:null,modal:null,
 };
 
-// ── INIT ──
 async function init(){
-  const {data:{session}}=await sb.auth.getSession();
-  if(session?.user) await loginSuccess(session.user);
-  else setTimeout(()=>{hideSplash();render('auth');},2000);
-  sb.auth.onAuthStateChange(async(e,session)=>{
-    if(e==='SIGNED_IN'&&session?.user&&!S.user) await loginSuccess(session.user);
+  try{
+    const t=new Promise((_,r)=>setTimeout(()=>r('timeout'),4000));
+    const s=await Promise.race([sb.auth.getSession(),t]);
+    if(s?.data?.session?.user) await loginSuccess(s.data.session.user);
+    else{hideSplash();render('auth');}
+  }catch(e){hideSplash();render('auth');}
+  sb.auth.onAuthStateChange(async(e,s)=>{
+    if(e==='SIGNED_IN'&&s?.user&&!S.user)await loginSuccess(s.user);
   });
 }
 async function loginSuccess(user){
+  try{
+    S.user=user;
+    const[prof,trks,prog,aiSet]=await Promise.all([
+      loadProfile(user.id),
+      loadTracks(),
+      loadProgress(user.id),
+      loadAiSettings(),
+    ]);
+    S.profile=prof;
+    S.tracks=trks||[];
+    S.progress=prog||new Set();
+    S.aiSettings=aiSet||{};
+    S.aiModel=S.aiSettings?.gemini_key?'gemini':S.aiSettings?.openai_key?'openai':S.aiSettings?.grok_key?'grok':'gemini';
+    if(!S.profile){hideSplash();render('auth');return;}
+    hideSplash();render('main');
+  }catch(e){hideSplash();render('auth');}
+}async function loginSuccess(user){
   S.user=user;
   S.profile=await loadProfile(user.id);
   if(!S.profile){setTimeout(()=>init(),1500);return;}
