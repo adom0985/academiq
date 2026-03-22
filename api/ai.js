@@ -13,10 +13,21 @@ export default async function handler(req) {
   }
 
   try {
-    const { model, prompt, system, key } = await req.json();
+    const { model, prompt, system } = await req.json();
 
+    const keys = {
+      claude: process.env.CLAUDE_KEY,
+      gemini: process.env.GEMINI_KEY,
+      openai: process.env.OPENAI_KEY,
+      grok:   process.env.GROK_KEY,
+    };
+
+    const key = keys[model];
     if (!key) {
-      return new Response(JSON.stringify({ text: '⚠️ مفتاح API غير موجود' }), { headers });
+      return new Response(
+        JSON.stringify({ text: `⚠️ مفتاح ${model} غير موجود في الإعدادات` }),
+        { headers }
+      );
     }
 
     let text = 'لا يوجد رد.';
@@ -37,7 +48,7 @@ export default async function handler(req) {
         }),
       });
       const d = await r.json();
-      text = d.content?.[0]?.text || 'لا يوجد رد.';
+      text = d.content?.[0]?.text || JSON.stringify(d);
     }
 
     else if (model === 'gemini') {
@@ -52,7 +63,7 @@ export default async function handler(req) {
         }
       );
       const d = await r.json();
-      text = d.candidates?.[0]?.content?.parts?.[0]?.text || 'لا يوجد رد.';
+      text = d.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(d);
     }
 
     else if (model === 'openai') {
@@ -72,7 +83,7 @@ export default async function handler(req) {
         }),
       });
       const d = await r.json();
-      text = d.choices?.[0]?.message?.content || 'لا يوجد رد.';
+      text = d.choices?.[0]?.message?.content || JSON.stringify(d);
     }
 
     else if (model === 'grok') {
@@ -92,7 +103,7 @@ export default async function handler(req) {
         }),
       });
       const d = await r.json();
-      text = d.choices?.[0]?.message?.content || 'لا يوجد رد.';
+      text = d.choices?.[0]?.message?.content || JSON.stringify(d);
     }
 
     return new Response(JSON.stringify({ text }), { headers });
