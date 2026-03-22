@@ -1,70 +1,106 @@
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({error: 'Method not allowed'});
+export const config = { runtime: 'edge' };
 
-  const { model, prompt, system, messages } = req.body;
+export default async function handler(req) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json',
+  };
+
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 200, headers });
+  }
 
   try {
+    const { model, prompt, system, key } = await req.json();
+
+    if (!key) {
+      return new Response(JSON.stringify({ text: '⚠️ مفتاح API غير موجود' }), { headers });
+    }
+
+    let text = 'لا يوجد رد.';
+
     if (model === 'claude') {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': req.body.key,
-          'anthropic-version': '2023-06-01'
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1500,
           system: system || 'أنت مدرس ذكي.',
-          messages: messages || [{role:'user',content:prompt}]
-        })
+          messages: [{ role: 'user', content: prompt }],
+        }),
       });
       const d = await r.json();
-      return res.json({text: d.content?.[0]?.text || 'لا يوجد رد.'});
+      text = d.content?.[0]?.text || 'لا يوجد رد.';
     }
 
-    if (model === 'gemini') {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${req.body.key}`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({contents:[{parts:[{text:(system?system+'\n\n':'')+prompt}]}]})
-      });
+    else if (model === 'gemini') {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: (system ? system + '\n\n' : '') + prompt }] }],
+          }),
+        }
+      );
       const d = await r.json();
-      return res.json({text: d.candidates?.[0]?.content?.parts?.[0]?.text || 'لا يوجد رد.'});
+      text = d.candidates?.[0]?.content?.parts?.[0]?.text || 'لا يوجد رد.';
     }
 
-    if (model === 'openai') {
+    else if (model === 'openai') {
       const r = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: {'Content-Type':'application/json','Authorization':'Bearer '+req.body.key},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + key,
+        },
         body: JSON.stringify({
-          model: 'gpt-4o-mini', max_tokens: 1500,
-          messages: [{role:'system',content:system||'أنت مدرس ذكي.'},{role:'user',content:prompt}]
-        })
+          model: 'gpt-4o-mini',
+          max_tokens: 1500,
+          messages: [
+            { role: 'system', content: system || 'أنت مدرس ذكي.' },
+            { role: 'user', content: prompt },
+          ],
+        }),
       });
       const d = await r.json();
-      return res.json({text: d.choices?.[0]?.message?.content || 'لا يوجد رد.'});
+      text = d.choices?.[0]?.message?.content || 'لا يوجد رد.';
     }
 
-    if (model === 'grok') {
+    else if (model === 'grok') {
       const r = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
-        headers: {'Content-Type':'application/json','Authorization':'Bearer '+req.body.key},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + key,
+        },
         body: JSON.stringify({
-          model: 'grok-beta', max_tokens: 1500,
-          messages: [{role:'system',content:system||'أنت مدرس ذكي.'},{role:'user',content:prompt}]
-        })
+          model: 'grok-beta',
+          max_tokens: 1500,
+          messages: [
+            { role: 'system', content: system || 'أنت مدرس ذكي.' },
+            { role: 'user', content: prompt },
+          ],
+        }),
       });
       const d = await r.json();
-      return res.json({text: d.choices?.[0]?.message?.content || 'لا يوجد رد.'});
+      text = d.choices?.[0]?.message?.content || 'لا يوجد رد.';
     }
 
-    return res.json({text: 'نموذج غير معروف.'});
-  } catch(e) {
-    return res.status(500).json({text: '⚠️ خطأ: ' + e.message});
+    return new Response(JSON.stringify({ text }), { headers });
+
+  } catch (e) {
+    return new Response(
+      JSON.stringify({ text: '⚠️ خطأ: ' + e.message }),
+      { status: 500, headers }
+    );
   }
 }
